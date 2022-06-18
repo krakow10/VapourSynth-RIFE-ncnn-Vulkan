@@ -5,7 +5,7 @@ Real-Time Intermediate Flow Estimation for Video Frame Interpolation, based on [
 
 
 ## Usage
-    rife.RIFE(vnode clip[, int model=5, float multiplier=2.0, string model_path=None, int gpu_id=None, int gpu_thread=2, bint tta=False, bint uhd=False, bint sc=False, bint skip=False, float skip_threshold=60.0, bint list_gpu=False])
+    rife.RIFE(vnode clip[, int model=5, int multiplier=2, int divisor=1, string model_path=None, int gpu_id=None, int gpu_thread=2, bint tta=False, bint uhd=False, bint sc=False, bint skip=False, float skip_threshold=60.0, bint list_gpu=False])
 
 - clip: Clip to process. Only RGB format with float sample type of 32 bit depth is supported.
 

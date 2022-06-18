@@ -82,7 +82,7 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
 
     if (activationReason == arInitial) {
         vsapi->requestFrameFilter(frameNum, d->node, frameCtx);
-        if (remainder != 0 && frameNum + 1 < d->vi.numFrames)
+        if (remainder != 0 && n < d->vi.numFrames - d->multiplier)
             vsapi->requestFrameFilter(frameNum + 1, d->node, frameCtx);
 
         if (d->skip)
@@ -94,7 +94,7 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
         VSFrame* dst{};
 
         // Should the frame be interpolated && can the frame be interpolated
-        if (remainder != 0 && frameNum + 1 < d->vi.numFrames) {
+        if (remainder != 0 && n < d->vi.numFrames - d->multiplier) {
             bool sceneChange{};
             double psnr_y{ -1.0 };
             int err;

@@ -42,7 +42,8 @@ struct RIFEData final {
     VSNode* node;
     VSNode* psnr;
     VSVideoInfo vi;
-    double multiplier;
+    int multiplier;
+    int divisor;
     bool sceneChange;
     bool skip;
     double skip_threshold;
@@ -74,10 +75,10 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
                                          VSFrameContext* frameCtx, VSCore* core, const VSAPI* vsapi) {
     auto d{ static_cast<const RIFEData*>(instanceData) };
 
-    auto num{ static_cast<int64_t>(n) * 100 };
-    auto den{ static_cast<int64_t>(d->multiplier * 100) };
-    auto frameNum{ static_cast<int>(num / den) };
-    auto remainder{ (num % den) / 100.0 };
+    // Source frame number
+    auto frameNum{ static_cast<int>(n * d->divisor / d->multiplier) };
+    // Interpolation blend t = remainder / multiplier
+    auto remainder{ n * d->divisor % d->multiplier };
 
     if (activationReason == arInitial) {
         vsapi->requestFrameFilter(frameNum, d->node, frameCtx);
@@ -92,6 +93,7 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
         decltype(src0) psnr{};
         VSFrame* dst{};
 
+        // Should the frame be interpolated && can the frame be interpolated
         if (remainder != 0 && n < d->vi.numFrames - d->multiplier) {
             bool sceneChange{};
             double psnr_y{ -1.0 };
@@ -110,9 +112,11 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
             } else {
                 src1 = vsapi->getFrameFilter(frameNum + 1, d->node, frameCtx);
                 dst = vsapi->newVideoFrame(&d->vi.format, d->vi.width, d->vi.height, src0, core);
-                filter(src0, src1, dst, static_cast<float>(remainder / d->multiplier), d, vsapi);
+                // Interpolate with t = remainder / multiplier
+                filter(src0, src1, dst, static_cast<float>(remainder) / static_cast<float>(d->multiplier), d, vsapi);
             }
         } else {
+            // Passthrough
             dst = vsapi->copyFrame(src0, core);
         }
 
@@ -121,7 +125,7 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
         auto durationNum{ vsapi->mapGetInt(props, "_DurationNum", 0, &errNum) };
         auto durationDen{ vsapi->mapGetInt(props, "_DurationDen", 0, &errDen) };
         if (!errNum && !errDen) {
-            vsh::muldivRational(&durationNum, &durationDen, 100, static_cast<int64_t>(d->multiplier * 100));
+            vsh::muldivRational(&durationNum, &durationDen, static_cast<int64_t>(d->divisor), static_cast<int64_t>(d->multiplier));
             vsapi->mapSetInt(props, "_DurationNum", durationNum, maReplace);
             vsapi->mapSetInt(props, "_DurationDen", durationDen, maReplace);
         }
@@ -167,9 +171,13 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         if (err)
             model = 5;
 
-        d->multiplier = vsapi->mapGetFloat(in, "multiplier", 0, &err);
+        d->multiplier = vsapi->mapGetIntSaturated(in, "multiplier", 0, &err);
         if (err)
-            d->multiplier = 2.0;
+            d->multiplier = 2;
+
+        d->divisor = vsapi->mapGetIntSaturated(in, "divisor", 0, &err);
+        if (err)
+            d->divisor = 1;
 
         auto model_path{ vsapi->mapGetData(in, "model_path", 0, &err) };
         std::string modelPath{ err ? "" : model_path };
@@ -194,8 +202,11 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         if (model < 0 || model > 9)
             throw "model must be between 0 and 9 (inclusive)";
 
-        if (d->multiplier <= 1)
+        if (d->multiplier < 2)
             throw "multiplier must be greater than 1";
+
+        if (d->divisor < 1)
+            throw "divisor must be greater than 0";
 
         if (gpuId < 0 || gpuId >= ncnn::get_gpu_count())
             throw "invalid GPU device";
@@ -209,7 +220,7 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         if (d->vi.numFrames < 2)
             throw "clip's number of frames must be at least 2";
 
-        if (d->vi.numFrames > INT_MAX / d->multiplier)
+        if (d->vi.numFrames / d->divisor > INT_MAX / d->multiplier)
             throw "resulting clip is too long";
 
         if (!!vsapi->mapGetInt(in, "list_gpu", 0, &err)) {
@@ -297,7 +308,7 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         else if (modelPath.find("rife") == std::string::npos)
             throw "unknown model dir type";
 
-        if (!rife_v4 && d->multiplier != 2)
+        if (!rife_v4 && (d->multiplier != 2 || d->divisor != 1))
             throw "only rife-v4 model supports custom multiplier";
 
         if (rife_v4 && tta)
@@ -384,8 +395,8 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
             vsapi->freeMap(ret);
         }
 
-        d->vi.numFrames = static_cast<int>(d->vi.numFrames * d->multiplier);
-        vsh::muldivRational(&d->vi.fpsNum, &d->vi.fpsDen, static_cast<int64_t>(d->multiplier * 100), 100);
+        d->vi.numFrames = static_cast<int>(d->vi.numFrames * d->multiplier / d->divisor);
+        vsh::muldivRational(&d->vi.fpsNum, &d->vi.fpsDen, static_cast<int64_t>(d->multiplier), static_cast<int64_t>(d->divisor));
 
         d->rife = std::make_unique<RIFE>(gpuId, tta, uhd, 1, rife_v2, rife_v4);
 
@@ -424,7 +435,8 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI
     vspapi->registerFunction("RIFE",
                              "clip:vnode;"
                              "model:int:opt;"
-                             "multiplier:float:opt;"
+                             "multiplier:int:opt;"
+                             "divisor:int:opt;"
                              "model_path:data:opt;"
                              "gpu_id:int:opt;"
                              "gpu_thread:int:opt;"

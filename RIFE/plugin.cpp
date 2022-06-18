@@ -171,11 +171,11 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         if (err)
             model = 5;
 
-        d->multiplier = vsapi->mapGetFloat(in, "multiplier", 0, &err);
+        d->multiplier = vsapi->mapGetIntSaturated(in, "multiplier", 0, &err);
         if (err)
             d->multiplier = 2;
 
-        d->divisor = vsapi->mapGetFloat(in, "divisor", 0, &err);
+        d->divisor = vsapi->mapGetIntSaturated(in, "divisor", 0, &err);
         if (err)
             d->divisor = 1;
 

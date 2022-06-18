@@ -113,7 +113,7 @@ static const VSFrame* VS_CC rifeGetFrame(int n, int activationReason, void* inst
                 src1 = vsapi->getFrameFilter(frameNum + 1, d->node, frameCtx);
                 dst = vsapi->newVideoFrame(&d->vi.format, d->vi.width, d->vi.height, src0, core);
                 // Interpolate with t = remainder / multiplier
-                filter(src0, src1, dst, static_cast<float>(remainder / d->multiplier), d, vsapi);
+                filter(src0, src1, dst, static_cast<float>(remainder) / static_cast<float>(d->multiplier), d, vsapi);
             }
         } else {
             // Passthrough

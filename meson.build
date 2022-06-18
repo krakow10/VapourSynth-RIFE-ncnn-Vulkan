@@ -41,7 +41,6 @@ opt_var.add_cmake_defines({'NCNN_BUILD_EXAMPLES': false})
 opt_var.add_cmake_defines({'NCNN_INT8': false})
 opt_var.add_cmake_defines({'NCNN_AVX512': false})
 opt_var.add_cmake_defines({'NCNN_AVX512VNNI': false})
-opt_var.add_cmake_defines({'NCNN_F16C': false})
 opt_var.add_cmake_defines({'NCNN_XOP': false})
 
 opt_var.add_cmake_defines({'WITH_LAYER_absval': false})

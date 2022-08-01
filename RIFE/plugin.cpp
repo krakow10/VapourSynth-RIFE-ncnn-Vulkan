@@ -167,11 +167,11 @@ static void VS_CC rifeCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void*
         if (err)
             model = 5;
 
-        d->factorNum = vsapi->mapGetInt(in, "fps_num", 0, &err);
+        d->factorNum = vsapi->mapGetIntSaturated(in, "fps_num", 0, &err);
         if (err)
             d->factorNum = 2 * d->vi.fpsNum;
 
-        d->factorDen = vsapi->mapGetInt(in, "fps_den", 0, &err);
+        d->factorDen = vsapi->mapGetIntSaturated(in, "fps_den", 0, &err);
         if (err)
             d->factorDen = d->vi.fpsDen;
 
